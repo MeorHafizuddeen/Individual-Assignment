@@ -1,1 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <signal.h>
 
+#define NO_CHILD 5 // Limit loop limit of 5 for creating child process 
+
+int pipes[NO_CHILD][2]; // Pipes for passing message from parent to child
+
+// Function for interupt handler
+void handle_interrupt(int sig) {
+    printf("\nInterrupt received! Exiting...\n");
+    exit(0);
+}
+
+// Function for displaying message through child
+void display_message(int pipe_fd) {
+    char message[100];
+    close(pipes[pipe_fd][1]); // Close write end of the pipe
+
+    if(1) {
+	printf ("\nChild %d reading message from parent...\n", pipe_fd);
+	sleep (3); // Intentionally put 3 seconds pause before displaying message
+        read(pipes[pipe_fd][0], message, 100); // Read message from parent
+        printf("CHILD %d RECEIVED MESSAGE FROM PARENT: %s", pipe_fd, message);
+    }
+}
+
+// Main program / parent process
+int main() {
+    int counter;
+    pid_t pid; 
+    char message[100];
+
+    // Set up interrupt handler
+    signal(SIGINT, handle_interrupt);
+
+    // Get message from user
+    printf("Enter a message to parent process: ");
+    fgets(message, 100, stdin);
+
+    // Create pipes for each child process using for loop
+    for(counter= 0; counter< NO_CHILD; counter++) {
+	// Error handling when error creating pipes
+        if(pipe(pipes[counter]) == -1) {
+            perror("pipe");
+            exit(1);
+        }
+
+        pid = fork(); // Create child using fork function
+
+	 // Error handling when error creating child process
+        if(pid < 0) {
+            perror("fork");
+            exit(1);
+        }
+        else if(pid == 0) {
+            display_message(counter); // Calling display message function in child process
+	    printf ("Done displaying message from child %d...\n", counter);
+            exit(0);
+        }
+
+        close(pipes[counter][0]); // Close read end of the pipe
+        write(pipes[counter][1], message, 100); // Write message to child
+
+	sleep(5); // Put 5 seconds of pauses before displaying message of next child
+        wait(NULL);    
+    }
+
+    printf ("\nAll child processes finished! Exiting parent process...\n");
+    return 0;
+
+}
